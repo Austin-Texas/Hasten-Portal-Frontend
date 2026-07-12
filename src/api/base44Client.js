@@ -26,33 +26,96 @@ const normalizeEntityName = (name) =>
 
 const unwrap = (payload) => payload?.data ?? payload?.items ?? payload
 
-const makeEntity = (entityName) => {
-  const resource = `/entities/${normalizeEntityName(entityName)}`
-
-  return {
-    list: async (sort = '', limit) => {
-      const params = new URLSearchParams()
-      if (sort) params.set('sort', sort)
-      if (limit) params.set('limit', String(limit))
-      return unwrap(await coreApi.get(`${resource}${params.size ? `?${params}` : ''}`)) || []
-    },
-    filter: async (filter = {}, sort = '', limit) => {
-      const params = new URLSearchParams()
-      Object.entries(filter || {}).forEach(([key, value]) => params.set(key, Array.isArray(value) ? value.join(',') : String(value)))
-      if (sort) params.set('sort', sort)
-      if (limit) params.set('limit', String(limit))
-      return unwrap(await coreApi.get(`${resource}?${params}`)) || []
-    },
-    get: async (id) => unwrap(await coreApi.get(`${resource}/${encodeURIComponent(id)}`)),
-    create: async (payload = {}) => unwrap(await coreApi.post(resource, payload)),
-    update: async (id, payload = {}) => unwrap(await coreApi.patch(`${resource}/${encodeURIComponent(id)}`, payload)),
-    delete: async (id) => unwrap(await coreApi.delete(`${resource}/${encodeURIComponent(id)}`)),
-    bulkCreate: async (items = []) => unwrap(await coreApi.post(`${resource}/bulk`, { items })),
-    updateMany: async (items = []) => unwrap(await coreApi.patch(`${resource}/bulk`, { items })),
-    deleteMany: async (ids = []) => unwrap(await coreApi.delete(`${resource}/bulk`, { body: { ids } })),
-    subscribe: () => () => undefined,
-  }
+const ENTITY_RESOURCES = {
+  user: '/users',
+  users: '/users',
+  driver: '/drivers',
+  drivers: '/drivers',
+  load: '/loads',
+  loads: '/loads',
+  shipment: '/shipments',
+  shipments: '/shipments',
+  quote: '/quotes',
+  quotes: '/quotes',
+  settlement: '/settlements',
+  settlements: '/settlements',
+  invoice: '/invoices',
+  invoices: '/invoices',
+  document: '/documents',
+  documents: '/documents',
+  notification: '/notifications',
+  notifications: '/notifications',
+  maintenance: '/maintenance',
+  'maintenance-record': '/maintenance',
+  'maintenance-records': '/maintenance',
+  fuel: '/fuel',
+  'fuel-transaction': '/fuel',
+  'fuel-transactions': '/fuel',
+  party: '/parties',
+  parties: '/parties',
+  customer: '/parties?party_type=customer',
+  customers: '/parties?party_type=customer',
+  broker: '/parties?party_type=broker',
+  brokers: '/parties?party_type=broker',
+  conversation: '/messages/conversations',
+  conversations: '/messages/conversations',
 }
+
+function resolveEntityResource(entityName) {
+  const normalized = normalizeEntityName(entityName)
+  const resource = ENTITY_RESOURCES[normalized]
+  if (!resource) {
+    throw new Error(`Portal module "${entityName}" is not mapped to a native HASTEN Core API resource.`)
+  }
+  return resource
+}
+
+function appendParams(resource, params) {
+  const separator = resource.includes('?') ? '&' : '?'
+  return params.size ? `${resource}${separator}${params}` : resource
+}
+
+const makeEntity = (entityName) => ({
+  list: async (sort = '', limit) => {
+    const resource = resolveEntityResource(entityName)
+    const params = new URLSearchParams()
+    if (sort) params.set('sort', sort)
+    if (limit) params.set('limit', String(limit))
+    return unwrap(await coreApi.get(appendParams(resource, params))) || []
+  },
+  filter: async (filter = {}, sort = '', limit) => {
+    const resource = resolveEntityResource(entityName)
+    const params = new URLSearchParams()
+    Object.entries(filter || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.set(key, Array.isArray(value) ? value.join(',') : String(value))
+      }
+    })
+    if (sort) params.set('sort', sort)
+    if (limit) params.set('limit', String(limit))
+    return unwrap(await coreApi.get(appendParams(resource, params))) || []
+  },
+  get: async (id) => {
+    const resource = resolveEntityResource(entityName).split('?')[0]
+    return unwrap(await coreApi.get(`${resource}/${encodeURIComponent(id)}`))
+  },
+  create: async (payload = {}) => {
+    const resource = resolveEntityResource(entityName).split('?')[0]
+    return unwrap(await coreApi.post(resource, payload))
+  },
+  update: async (id, payload = {}) => {
+    const resource = resolveEntityResource(entityName).split('?')[0]
+    return unwrap(await coreApi.patch(`${resource}/${encodeURIComponent(id)}`, payload))
+  },
+  delete: async (id) => {
+    const resource = resolveEntityResource(entityName).split('?')[0]
+    return unwrap(await coreApi.delete(`${resource}/${encodeURIComponent(id)}`))
+  },
+  bulkCreate: async (items = []) => Promise.all(items.map((item) => makeEntity(entityName).create(item))),
+  updateMany: async (items = []) => Promise.all(items.map(({ id, ...payload }) => makeEntity(entityName).update(id, payload))),
+  deleteMany: async (ids = []) => Promise.all(ids.map((id) => makeEntity(entityName).delete(id))),
+  subscribe: () => () => undefined,
+})
 
 const auth = {
   me: async () => {
@@ -98,6 +161,18 @@ const auth = {
   },
 }
 
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('Unable to read the selected file.'))
+    reader.onload = () => {
+      const result = String(reader.result || '')
+      resolve(result.includes(',') ? result.slice(result.indexOf(',') + 1) : result)
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
 export const hastenCore = {
   auth,
   entities: new Proxy({}, {
@@ -114,14 +189,22 @@ export const hastenCore = {
   }),
   files: {
     uploadFile: async (fileOrOptions) => {
-      const file = fileOrOptions?.file || fileOrOptions
-      const form = new FormData()
-      form.append('file', file)
-      return unwrap(await coreApi.post('/documents/upload', form))
+      const options = fileOrOptions?.file ? fileOrOptions : { file: fileOrOptions }
+      const file = options.file
+      if (!(file instanceof File)) throw new Error('A valid file is required.')
+      const fileDataBase64 = await fileToBase64(file)
+      return unwrap(await coreApi.post('/documents/upload', {
+        documentType: options.documentType || options.doc_type || 'other',
+        mimeType: file.type,
+        fileName: file.name,
+        fileDataBase64,
+        loadId: options.loadId || options.load_id || null,
+        expiresAt: options.expiresAt || options.expires_at || null,
+        notes: options.notes || null,
+      }))
     },
   },
 }
 
-// Temporary compatibility export while existing portal imports are renamed.
-// This object is backed exclusively by the HASTEN Core API; no Base44 SDK is used.
+// Temporary import compatibility only. All operations above use native HA-Core API routes.
 export const base44 = hastenCore
