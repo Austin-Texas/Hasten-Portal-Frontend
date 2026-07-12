@@ -61,21 +61,28 @@ const auth = {
     return unwrap(await coreApi.get('/auth/me'))
   },
   login: async ({ email, password, remember = false }) => {
-    const payload = unwrap(await coreApi.post('/auth/login', { email, password, remember }))
+    const payload = await coreApi.post('/auth/login', { email, password, remember })
     const accessToken = payload?.access_token || payload?.accessToken || payload?.token
+    const refreshToken = payload?.refresh_token || payload?.refreshToken
     if (accessToken && isBrowser) {
       const storage = remember ? window.localStorage : window.sessionStorage
       storage.setItem('hasten_access_token', accessToken)
+      if (refreshToken) storage.setItem('hasten_refresh_token', refreshToken)
     }
     return payload
   },
   logout: async () => {
+    const refreshToken = isBrowser
+      ? window.localStorage.getItem('hasten_refresh_token') || window.sessionStorage.getItem('hasten_refresh_token')
+      : null
     try {
-      await coreApi.post('/auth/logout', {})
+      await coreApi.post('/auth/logout', refreshToken ? { refreshToken } : {})
     } finally {
       if (isBrowser) {
         window.localStorage.removeItem('hasten_access_token')
         window.sessionStorage.removeItem('hasten_access_token')
+        window.localStorage.removeItem('hasten_refresh_token')
+        window.sessionStorage.removeItem('hasten_refresh_token')
         window.localStorage.removeItem('hasten_user')
       }
     }
@@ -86,7 +93,7 @@ const auth = {
   loginWithProvider: (provider, redirectPath = '/dashboard') => {
     if (isBrowser) {
       const callback = encodeURIComponent(`${window.location.origin}${redirectPath}`)
-      window.location.href = `${import.meta.env.VITE_CORE_API_URL || 'https://api.hastenload.com/api'}/auth/oauth/${encodeURIComponent(provider)}?redirect_uri=${callback}`
+      window.location.href = `${import.meta.env.VITE_CORE_API_URL || 'https://api.hastenload.com/api/v1'}/auth/oauth/${encodeURIComponent(provider)}?redirect_uri=${callback}`
     }
   },
 }
