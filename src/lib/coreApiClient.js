@@ -1,4 +1,4 @@
-const DEFAULT_API_URL = 'https://api.hastenload.com/api'
+const DEFAULT_API_URL = 'https://api.hastenload.com/api/v1'
 
 function normalizeBaseUrl(value) {
   return String(value || DEFAULT_API_URL).replace(/\/+$/, '')
@@ -43,6 +43,9 @@ export async function coreApiRequest(path, options = {}) {
     headers.set('Content-Type', 'application/json')
   }
   if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`)
+  if (options.idempotencyKey && !headers.has('Idempotency-Key')) {
+    headers.set('Idempotency-Key', options.idempotencyKey)
+  }
 
   let response
   try {
