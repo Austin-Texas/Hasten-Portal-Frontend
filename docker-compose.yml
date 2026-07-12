@@ -1,15 +1,16 @@
 services:
   portal:
+    image: image-portal-test
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: hasten-portal-test
+    container_name: container-portal-test
     restart: unless-stopped
     ports:
       - "127.0.0.1:8091:80"
     networks:
-      - hasten-portal-test-net
+      - network-portal-test
 
 networks:
-  hasten-portal-test-net:
+  network-portal-test:
     driver: bridge
