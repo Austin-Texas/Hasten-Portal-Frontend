@@ -86,7 +86,7 @@ const auth = {
   loginWithProvider: (provider, redirectPath = '/dashboard') => {
     if (isBrowser) {
       const callback = encodeURIComponent(`${window.location.origin}${redirectPath}`)
-      window.location.href = `${import.meta.env.VITE_CORE_API_URL || 'https://ha-core.hastenload.com/api'}/auth/oauth/${encodeURIComponent(provider)}?redirect_uri=${callback}`
+      window.location.href = `${import.meta.env.VITE_CORE_API_URL || 'https://api.hastenload.com/api'}/auth/oauth/${encodeURIComponent(provider)}?redirect_uri=${callback}`
     }
   },
 }
