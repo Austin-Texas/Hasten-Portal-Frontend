@@ -1,6 +1,20 @@
 import { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { hastenCore } from "@/api/base44Client";
 import { Eye, EyeOff, Mail, Lock, Truck, Shield, Clock, MapPin } from "lucide-react";
+
+const ROLE_REDIRECTS = {
+  super_admin: "/dashboard",
+  admin: "/dashboard",
+  system_manager: "/dashboard",
+  dispatcher: "/dispatch",
+  fleet_manager: "/fleet-manager",
+  finance: "/finance",
+  driver: "/driver/dashboard",
+  client: "/client",
+  customer: "/client",
+  broker: "/crm",
+  safety_compliance: "/compliance",
+};
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -10,43 +24,28 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-const handleLogin = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError("");
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
-    const demoUsers = {
-    "netzeus20@gmail.com": {
-      password: "123456",
-      redirect: "/dashboard"
-    },
-    "driver@hasten.com": {
-      password: "driver123",
-      redirect: "/dashboard"
+    try {
+      const result = await hastenCore.auth.login({
+        email: email.trim().toLowerCase(),
+        password,
+        remember,
+      });
+
+      const user = result?.user || result?.data?.user || result;
+      const role = user?.businessRole || user?.business_role || user?.role || "admin";
+      window.location.assign(ROLE_REDIRECTS[role] || "/dashboard");
+    } catch (loginError) {
+      setError(loginError?.message || "Unable to sign in. Check your credentials and try again.");
+      setLoading(false);
     }
   };
 
-  const emailKey = email.trim().toLowerCase();
-  const user = demoUsers[emailKey];
-  console.log("LOGIN TEST:", emailKey, password.trim(), user);
-
-  if (user && password.trim() === user.password) {
-    
-    localStorage.setItem(
-  "hasten_user",
-  JSON.stringify({
-    email: emailKey,
-    role: "super_admin"
-  })
-  );
-    window.location.href = user.redirect;
-    return;
-  }
-
-  setError("Invalid email or password. Please try again.");
-  setLoading(false);
-};
-  const handleGoogle = () => base44.auth.loginWithProvider("google", "/dashboard");
+  const handleGoogle = () => hastenCore.auth.loginWithProvider("google", "/dashboard");
 
   return (
     <div className="min-h-screen flex bg-[#080E1A]">
@@ -109,14 +108,12 @@ const handleLogin = async (e) => {
                 <div className="text-slate-500 text-xs">On-time delivery</div>
               </div>
             </div>
-            {/* Progress bar */}
             <div className="mt-3 h-1.5 bg-white/5 rounded-full overflow-hidden">
               <div className="h-full w-[84%] bg-gradient-to-r from-orange-500 to-orange-400 rounded-full" />
             </div>
           </div>
         </div>
 
-        {/* Feature icons */}
         <div className="relative z-10 grid grid-cols-3 gap-4">
           {[
             { icon: Shield, label: "Secure", sub: "Enterprise encryption" },
@@ -135,10 +132,8 @@ const handleLogin = async (e) => {
       </div>
 
       {/* Right Login Panel */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12"
-        style={{ background: "#0A1220" }}>
+      <div className="flex-1 flex items-center justify-center p-6 lg:p-12" style={{ background: "#0A1220" }}>
         <div className="w-full max-w-md">
-          {/* Mobile logo */}
           <div className="flex items-center gap-3 mb-10 lg:hidden">
             <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center">
               <Truck className="w-6 h-6 text-white" />
@@ -171,6 +166,7 @@ const handleLogin = async (e) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="driver@hastencargo.com"
+                  autoComplete="email"
                   required
                   className="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-4 py-3 text-white placeholder-slate-600 text-sm focus:outline-none focus:border-orange-500/50 focus:bg-white/8 transition-colors"
                 />
@@ -187,6 +183,7 @@ const handleLogin = async (e) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
+                  autoComplete="current-password"
                   required
                   className="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-10 py-3 text-white placeholder-slate-600 text-sm focus:outline-none focus:border-orange-500/50 focus:bg-white/8 transition-colors"
                 />
@@ -244,6 +241,7 @@ const handleLogin = async (e) => {
 
           <div className="grid grid-cols-2 gap-3">
             <button
+              type="button"
               onClick={handleGoogle}
               className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg border border-white/10 bg-white/5 text-slate-300 text-sm font-medium hover:bg-white/8 hover:border-white/20 transition-all duration-150"
             >
@@ -256,7 +254,8 @@ const handleLogin = async (e) => {
               Google
             </button>
             <button
-              onClick={() => base44.auth.loginWithProvider("microsoft", "/dashboard")}
+              type="button"
+              onClick={() => hastenCore.auth.loginWithProvider("microsoft", "/dashboard")}
               className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg border border-white/10 bg-white/5 text-slate-300 text-sm font-medium hover:bg-white/8 hover:border-white/20 transition-all duration-150"
             >
               <svg viewBox="0 0 24 24" className="w-4 h-4">
