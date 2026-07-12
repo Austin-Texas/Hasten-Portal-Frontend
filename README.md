@@ -1,43 +1,60 @@
-**Welcome to your Base44 project** 
+# HASTEN Portal Frontend
 
-**About**
+Private enterprise portal for HASTEN Cargo operations, dispatch, fleet, finance, drivers, customers, brokers, and external partners.
 
-View and Edit  your app on [Base44.com](http://Base44.com) 
+## Architecture
 
-This project contains everything you need to run your app locally.
+- Frontend: React 18 + Vite
+- Routing: React Router
+- Data fetching: HASTEN Core API
+- Backend repository: `Austin-Texas/hasten-core-api`
+- Portal repository: `Austin-Texas/Hasten-Portal-Frontend`
+- Production API: `https://ha-core.hastenload.com/api`
 
-**Edit the code in your local development environment**
+Base44 is not part of the supported architecture. The portal must communicate only with the HASTEN Core API.
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
+## Local development
 
-**Prerequisites:** 
-
-1. Clone the repository using the project's Git URL 
-2. Navigate to the project directory
-3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
-
-```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
-
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
 ```
 
-Run the app: `npm run dev`
+Required environment variable:
 
-**Publish your changes**
+```env
+VITE_CORE_API_URL=https://ha-core.hastenload.com/api
+```
 
-Open [Base44.com](http://Base44.com) and click on Publish.
+Do not commit API secrets, database credentials, private keys, or production access tokens. Browser authentication tokens are supplied at runtime by the HASTEN authentication flow.
 
-**Verification**
+## Validation
 
-Latest verification rerun triggered after restoring the Driver Document Scanner smoke-check text.
+```bash
+npm run typecheck
+npm run lint
+npm run build
+```
 
-**Docs & Support**
+## Development and deployment policy
 
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
+1. Inspect and change the GitHub repository first.
+2. Validate the code before deployment.
+3. Commit completed work to GitHub.
+4. Deploy the validated GitHub revision to the portal server.
+5. Never reset or overwrite persistent backend data during a frontend deployment.
 
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+## Core API integration
+
+The shared client is located at `src/lib/coreApiClient.js`. New portal features should use this client instead of calling external backend platforms directly.
+
+The initial partner portal routes are expected under:
+
+- `POST /partner/load-requests`
+- `POST /partner/document-requests`
+- `POST /partner/invoice-disputes`
+- `GET /partner/portal`
+- `POST /notifications`
+
+The corresponding endpoints must exist in `hasten-core-api` before production activation.
