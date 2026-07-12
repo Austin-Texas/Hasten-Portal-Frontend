@@ -1,15 +1,16 @@
 services:
   portal:
+    image: image-portal-prod
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: hasten-portal-prod
+    container_name: container-portal-prod
     restart: unless-stopped
     ports:
       - "127.0.0.1:8089:80"
     networks:
-      - hasten-portal-prod-net
+      - network-portal-prod
 
 networks:
-  hasten-portal-prod-net:
+  network-portal-prod:
     driver: bridge
