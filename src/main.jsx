@@ -5,6 +5,7 @@ import '@/index.css'
 import '@/lib/hasten-ui.css'
 import '@/lib/hasten-density-bridge.css'
 import '@/lib/hasten-ui.js'
+import '@/lib/hasten-branding.js'
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
