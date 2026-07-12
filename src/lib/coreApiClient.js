@@ -1,4 +1,4 @@
-const DEFAULT_API_URL = 'https://ha-core.hastenload.com/api'
+const DEFAULT_API_URL = 'https://api.hastenload.com/api'
 
 function normalizeBaseUrl(value) {
   return String(value || DEFAULT_API_URL).replace(/\/+$/, '')
@@ -17,11 +17,12 @@ export class CoreApiError extends Error {
 }
 
 function getAccessToken() {
+  if (typeof window === 'undefined') return null
   return (
-    localStorage.getItem('hasten_access_token') ||
-    sessionStorage.getItem('hasten_access_token') ||
-    localStorage.getItem('access_token') ||
-    sessionStorage.getItem('access_token') ||
+    window.localStorage.getItem('hasten_access_token') ||
+    window.sessionStorage.getItem('hasten_access_token') ||
+    window.localStorage.getItem('access_token') ||
+    window.sessionStorage.getItem('access_token') ||
     null
   )
 }
@@ -63,6 +64,10 @@ export async function coreApiRequest(path, options = {}) {
 
   const payload = await parseResponse(response)
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      window.localStorage.removeItem('hasten_access_token')
+      window.sessionStorage.removeItem('hasten_access_token')
+    }
     const message =
       (payload && typeof payload === 'object' && (payload.message || payload.error)) ||
       `HASTEN Core API request failed with status ${response.status}.`
