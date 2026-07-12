@@ -1,4 +1,4 @@
-const DEFAULT_API_URL = 'https://ha-core.hastenload.com/api'
+const DEFAULT_API_URL = '/api'
 
 function normalizeBaseUrl(value) {
   return String(value || DEFAULT_API_URL).replace(/\/+$/, '')
