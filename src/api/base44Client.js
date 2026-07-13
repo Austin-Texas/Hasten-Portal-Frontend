@@ -26,27 +26,122 @@ const normalizeEntityName = (name) =>
 
 const unwrap = (payload) => payload?.data ?? payload?.items ?? payload
 
+const THEME_STORAGE_KEY = 'hasten-theme-settings'
+
+const readLocalThemeSettings = () => {
+  if (!isBrowser) return []
+  try {
+    const value = JSON.parse(window.localStorage.getItem(THEME_STORAGE_KEY) || '[]')
+    return Array.isArray(value) ? value : []
+  } catch {
+    return []
+  }
+}
+
+const writeLocalThemeSettings = (items) => {
+  if (!isBrowser) return
+  window.localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(items))
+}
+
+const filterLocalThemeSettings = (filter = {}) =>
+  readLocalThemeSettings().filter((item) =>
+    Object.entries(filter || {}).every(([key, value]) => String(item?.[key] ?? '') === String(value ?? ''))
+  )
+
+const createLocalThemeSetting = (payload = {}) => {
+  const items = readLocalThemeSettings()
+  const now = new Date().toISOString()
+  const item = {
+    ...payload,
+    id: payload.id || `local-theme-${payload.scope || 'user'}-${payload.target_id || payload.target_role || 'default'}`,
+    created_date: payload.created_date || now,
+    updated_date: now,
+  }
+  const existingIndex = items.findIndex((entry) => entry.id === item.id)
+  if (existingIndex >= 0) items[existingIndex] = item
+  else items.push(item)
+  writeLocalThemeSettings(items)
+  return item
+}
+
+const updateLocalThemeSetting = (id, payload = {}) => {
+  const items = readLocalThemeSettings()
+  const index = items.findIndex((item) => String(item.id) === String(id))
+  const now = new Date().toISOString()
+  const updated = index >= 0
+    ? { ...items[index], ...payload, id: items[index].id, updated_date: now }
+    : { ...payload, id, created_date: now, updated_date: now }
+  if (index >= 0) items[index] = updated
+  else items.push(updated)
+  writeLocalThemeSettings(items)
+  return updated
+}
+
 const makeEntity = (entityName) => {
-  const resource = `/entities/${normalizeEntityName(entityName)}`
+  const normalizedName = normalizeEntityName(entityName)
+  const resource = `/entities/${normalizedName}`
+  const isThemeSetting = normalizedName === 'theme-setting'
 
   return {
     list: async (sort = '', limit) => {
       const params = new URLSearchParams()
       if (sort) params.set('sort', sort)
       if (limit) params.set('limit', String(limit))
-      return unwrap(await coreApi.get(`${resource}${params.size ? `?${params}` : ''}`)) || []
+      try {
+        return unwrap(await coreApi.get(`${resource}${params.size ? `?${params}` : ''}`)) || []
+      } catch (error) {
+        if (!isThemeSetting) throw error
+        const items = readLocalThemeSettings()
+        return limit ? items.slice(0, limit) : items
+      }
     },
     filter: async (filter = {}, sort = '', limit) => {
       const params = new URLSearchParams()
       Object.entries(filter || {}).forEach(([key, value]) => params.set(key, Array.isArray(value) ? value.join(',') : String(value)))
       if (sort) params.set('sort', sort)
       if (limit) params.set('limit', String(limit))
-      return unwrap(await coreApi.get(`${resource}?${params}`)) || []
+      try {
+        return unwrap(await coreApi.get(`${resource}?${params}`)) || []
+      } catch (error) {
+        if (!isThemeSetting) throw error
+        const items = filterLocalThemeSettings(filter)
+        return limit ? items.slice(0, limit) : items
+      }
     },
-    get: async (id) => unwrap(await coreApi.get(`${resource}/${encodeURIComponent(id)}`)),
-    create: async (payload = {}) => unwrap(await coreApi.post(resource, payload)),
-    update: async (id, payload = {}) => unwrap(await coreApi.patch(`${resource}/${encodeURIComponent(id)}`, payload)),
-    delete: async (id) => unwrap(await coreApi.delete(`${resource}/${encodeURIComponent(id)}`)),
+    get: async (id) => {
+      try {
+        return unwrap(await coreApi.get(`${resource}/${encodeURIComponent(id)}`))
+      } catch (error) {
+        if (!isThemeSetting) throw error
+        return readLocalThemeSettings().find((item) => String(item.id) === String(id)) || null
+      }
+    },
+    create: async (payload = {}) => {
+      try {
+        return unwrap(await coreApi.post(resource, payload))
+      } catch (error) {
+        if (!isThemeSetting) throw error
+        return createLocalThemeSetting(payload)
+      }
+    },
+    update: async (id, payload = {}) => {
+      try {
+        return unwrap(await coreApi.patch(`${resource}/${encodeURIComponent(id)}`, payload))
+      } catch (error) {
+        if (!isThemeSetting) throw error
+        return updateLocalThemeSetting(id, payload)
+      }
+    },
+    delete: async (id) => {
+      try {
+        return unwrap(await coreApi.delete(`${resource}/${encodeURIComponent(id)}`))
+      } catch (error) {
+        if (!isThemeSetting) throw error
+        const items = readLocalThemeSettings().filter((item) => String(item.id) !== String(id))
+        writeLocalThemeSettings(items)
+        return { success: true }
+      }
+    },
     bulkCreate: async (items = []) => unwrap(await coreApi.post(`${resource}/bulk`, { items })),
     updateMany: async (items = []) => unwrap(await coreApi.patch(`${resource}/bulk`, { items })),
     deleteMany: async (ids = []) => unwrap(await coreApi.delete(`${resource}/bulk`, { body: { ids } })),
@@ -116,5 +211,5 @@ export const hastenCore = {
 }
 
 // Temporary compatibility export while existing portal imports are renamed.
-// This object is backed exclusively by the HASTEN Core API; no Base44 SDK is used.
+// This object is backed by HASTEN Core API with a browser fallback for theme preferences.
 export const base44 = hastenCore
