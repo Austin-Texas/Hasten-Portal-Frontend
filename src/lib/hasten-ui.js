@@ -1,7 +1,7 @@
 /* ============================================================
    HASTEN UI PERSISTENCE SYSTEM
-   Manages theme/density/glass/font/layout classes on <body>
-   via localStorage. Exposes window.HASTEN_UI for dropdowns.
+   Manages theme/density/glass/font/layout classes on <body> and
+   <html> via localStorage. Exposes window.HASTEN_UI for controls.
    ============================================================ */
 
 const STORAGE_KEY = "hasten-ui-settings";
@@ -27,33 +27,73 @@ function saveSettings(settings) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   } catch {
-    // ignore quota errors
+    // Ignore browser storage quota/privacy errors.
   }
+}
+
+function resolveTheme(theme) {
+  if (theme !== "theme-system") return theme;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches
+    ? "theme-dark"
+    : "theme-light";
 }
 
 function applySettings(settings) {
   const body = document.body;
-  if (!body) return;
+  const root = document.documentElement;
+  if (!body || !root) return;
+
+  const resolvedTheme = resolveTheme(settings.theme);
 
   body.classList.remove(
-    "theme-dark", "theme-light", "theme-high-contrast",
+    "theme-dark", "theme-light", "theme-high-contrast", "theme-system",
     "h-density-comfortable", "h-density-compact", "h-density-ultra",
     "glass-low", "glass-medium", "glass-high",
     "font-small", "font-default", "font-large",
     "layout-enterprise", "layout-premium"
   );
 
+  root.classList.remove(
+    "dark", "light", "high-contrast",
+    "density-comfortable", "density-compact", "density-ultra-compact",
+    "font-size-small", "font-size-default", "font-size-large"
+  );
+
   body.classList.add(
-    settings.theme,
+    resolvedTheme,
     settings.density,
     settings.glass,
     settings.font,
     settings.layout
   );
+
+  if (resolvedTheme === "theme-light") root.classList.add("light");
+  else if (resolvedTheme === "theme-high-contrast") root.classList.add("high-contrast");
+  else root.classList.add("dark");
+
+  const densityMap = {
+    "h-density-comfortable": "density-comfortable",
+    "h-density-compact": "density-compact",
+    "h-density-ultra": "density-ultra-compact"
+  };
+  const fontMap = {
+    "font-small": "font-size-small",
+    "font-default": "font-size-default",
+    "font-large": "font-size-large"
+  };
+
+  if (densityMap[settings.density]) root.classList.add(densityMap[settings.density]);
+  if (fontMap[settings.font]) root.classList.add(fontMap[settings.font]);
 }
 
 let settings = loadSettings();
-applySettings(settings);
+
+function applyWhenReady() {
+  if (document.body) applySettings(settings);
+  else document.addEventListener("DOMContentLoaded", () => applySettings(settings), { once: true });
+}
+
+applyWhenReady();
 
 const HASTEN_UI = {
   getSettings() {
@@ -86,17 +126,25 @@ const HASTEN_UI = {
   },
   applyRoleDefaults(role) {
     if (!role) return;
-    const r = role.toLowerCase();
-    if (["admin", "dispatcher", "superadmin", "super_admin"].includes(r)) {
-      this.setDensity("h-density-compact");
-      this.setLayout("layout-enterprise");
+    const normalizedRole = role.toLowerCase();
+    if (["admin", "dispatcher", "superadmin", "super_admin"].includes(normalizedRole)) {
+      settings.density = "h-density-compact";
+      settings.layout = "layout-enterprise";
     }
-    if (["driver", "customer"].includes(r)) {
-      this.setDensity("h-density-comfortable");
-      this.setLayout("layout-premium");
+    if (["driver", "customer", "client"].includes(normalizedRole)) {
+      settings.density = "h-density-comfortable";
+      settings.layout = "layout-premium";
     }
+    saveSettings(settings);
+    applySettings(settings);
   }
 };
+
+if (window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
+    if (settings.theme === "theme-system") applySettings(settings);
+  });
+}
 
 window.HASTEN_UI = HASTEN_UI;
 
